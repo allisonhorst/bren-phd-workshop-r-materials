@@ -1,0 +1,287 @@
+---
+title: "PhD Workshop Day 7 - Wrangling continued, multiple linear regression, get & visualize spatial data in R"
+author: "Allison Horst"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Get packages:
+```{r}
+
+library(tidyverse)
+library(tidyr)
+library(janitor)
+library(sf)
+library(corrplot)
+library(stargazer)
+library(tmap) # GET DEV VERSION! ("view" mode issues)
+
+```
+
+## 2. Warm-up: wrangling review, tidyr::pivot_longer()
+
+**NOTE:** You must have (very) recently installed `tidyr` from CRAN for pivot_longer() and pivot_wider() to work, and you must load the package in addition to the `tidyverse`. That's because the newest version of tidyr is not included in the most recent tidyverse release, so those updates aren't included in the overall tidyverse (but are in CRAN tidyr now). 
+
+Here, we'll use the world_bank_pop dataset (World Bank population data) from tidyr. Notice that it is in wide format (not tidy) - each year has its own column, when really there should be a single column 'year'. We'll use pivot_longer() to make it so.
+
+Note: indicator SP.POP.TOTL = total population (that's the variable we'll explore today)
+
+- First, check it out: `View(world_bank_pop)` (and ask yourself - why wouldn't you want to include the View() function in a code chunk that is then knit?)
+
+Let's do some wrangling: 
+```{r}
+
+pop_long <- world_bank_pop %>% 
+  filter(indicator == "SP.POP.TOTL") %>% 
+  select(-indicator) %>% 
+  pivot_longer(cols = '2000':'2017', # Note '' here; can also be "" or ``
+               names_to = "year",
+               values_to = "population") %>% # Names still "character", so...
+  mutate(year = as.numeric(year))
+
+# Let's calculate the average growth rate for each country (slope): 
+
+pop_rates <- pop_long %>% 
+  group_by(country) %>% 
+  summarize(
+    rate = (max(population) - min(population))/(max(year) - min(year))
+  ) %>% 
+  filter(country %in% c("USA","MEX","CAN"))
+
+# COOL, pivot_longer is much more intuitive than gather() and I strongly recommend getting new tidyr
+
+```
+
+## 3. Correlation exploration (dataset 'midwest')
+
+```{r}
+
+mw_num <- midwest %>% 
+  select(poptotal:percbelowpoverty) %>% 
+  cor()
+
+corrplot::corrplot(mw_num)
+
+# Or, some other options (see ?corrplot):
+corrplot(mw_num, 
+         type = "upper",
+         method = "ellipse")
+
+```
+
+## 4. Multiple linear regression (slo_homes.csv) - home prices in SLO
+
+Load the data 'slo_homes.csv' (after dropping the file into the project folder)
+
+```{r}
+slo_homes <- read_csv("slo_homes.csv")
+```
+
+Keep only data for 'San Luis Obispo,' 'Arroyo Grande,' 'Atascadero', 'Santa Maria-Orcutt'
+
+```{r}
+
+home_df <- slo_homes %>% 
+  filter(City %in% c("San Luis Obispo", "Arroyo Grande", "Atascadero", "Santa Maria-Orcutt"))
+
+```
+
+Prepare models (again - you will be responsible for conceptual understanding, checking assumptions, running diagnostics, etc.). This is just how it's done in R. 
+
+```{r mlr}
+
+# Run the complete model
+home_lm <- lm(Price ~ SqFt + Bedrooms + Bathrooms + Status + City, data = home_df)
+
+# And, just as an example, what if we remove 'Bedrooms'
+home_lm2 <- lm(Price ~ SqFt + Bathrooms + Status + City, data = home_df)
+
+# Check out the results
+summary(home_lm)
+summary(home_lm2)
+
+# What are the reference levels? 
+# Do these coefficients make sense?
+# What do the diagnostics tell us (using plot)?
+# There is one variable coefficient that is actually very unexpected here. Which is it?  
+
+```
+
+Create output tables using stargazer:
+
+```{r tables, results = 'asis'}
+
+stargazer(home_lm, home_lm2, type = "html",
+          title = "My awesome title!",
+          dep.var.caption = "A little column caption...",
+          dep.var.labels = "Model", 
+          digits = 2)
+
+```
+
+# Switching gears: getting & visualizing spatial data (some basics)
+
+## 5. SB County fire hazard zones 
+
+We'll use read_sf to read in entire layers of spatial data (different files do different things: geometries, attributes, metadata, projections, etc.). We want to read them all in at once. Easy with sf!
+
+First, let's explore fire hazard zones in SB county (data `fhszs06_3_42`):
+
+```{r}
+
+firezone <- read_sf(dsn = ".", layer = "fhszs06_3_42") %>%  # Cool. 
+  clean_names()
+
+# Do some basic exploring (may want to do this in the console...)
+# View(firezone)
+# st_crs(firezone) - no EPSG code (we'll set one)
+
+# Wrangle to only include the haz_class
+
+fire_haz <- firezone %>% 
+  select(haz_class) %>% # Notice that the geometries are still there! 
+  st_transform(crs = 4326) # Cool
+
+# Base plot:
+plot(fire_haz)
+
+```
+
+But we probably want it to have some context, and possibly even some interactivity! 
+
+```{r}
+
+fire_map <- tm_shape(fire_haz) +
+  tm_polygons("haz_class", 
+              style = "quantile", 
+              title = "Santa Barbara Fire Hazard Severity",
+              alpha = 0.5)
+
+fire_map
+
+# But let's set it to interactive viewing mode and try again!
+tmap_mode("view")
+fire_map
+
+# Even knit it and open the HMTL....oooooo aaaaaaa
+  
+```
+  
+## 6. California counties! 
+
+Get the entire layer for california_county_shape_file:
+```{r}
+
+ca_counties <- read_sf(dsn = ".", layer = "california_county_shape_file")# DON'T USE THIS...just to make it quicker for today (lowers resolution, show failure example at dTolerance = 10000, for example)
+
+# Set crs (doesn't come with projection info...so use st_crs)
+st_crs(ca_counties) = 4326
+```
+
+Then wrangle it a bit, and see a base R plot:
+```{r}
+# Get a cleaned up version:
+ca_clean <- ca_counties %>% 
+  clean_names() %>% 
+  select(name, area)
+
+plot(ca_clean)
+```
+
+Now make a better plot with tmap...(will stay in "view" mode until you change it back...)
+```{r}
+# Or with tmap: 
+
+ca_map <- tm_shape(ca_clean) +
+  tm_fill("area") +
+  tm_style("natural")
+
+ca_map
+
+# And you can also pick your own ESRI basemap!
+# http://leaflet-extras.github.io/leaflet-providers/preview/ (or use ?leaflet in Console, and click on the link in ‘server’ to leaflet extras)
+
+# Like this: 
+
+ca_watercolor <- tm_basemap("Stamen.Watercolor") +
+  tm_shape(ca_clean) +
+  tm_fill("area")
+
+ca_watercolor
+
+```
+
+## 7. But also ggplot is awesome (geom_sf)!
+
+```{r}
+ggplot(fire_haz) +
+  geom_sf(aes(fill = haz_class), color = NA) +
+  scale_fill_manual(values = c("orange","yellow","red"))
+```
+
+## 8. SB County fault lines (spatial clipping) - if time
+
+Get the state fault line data: 
+```{r}
+
+faults <- read_sf(dsn = ".", layer = "GMC_str_arc") %>% 
+  clean_names() %>% 
+  select(ltype) %>% 
+  st_transform(crs = 4326)
+
+plot(faults)
+
+```
+
+And we can overlay those on ca_counties: 
+```{r}
+
+fault_map <- tm_basemap("CartoDB.DarkMatter") +
+  tm_shape(ca_clean) +
+  tm_polygons(alpha = 0.2, 
+              fill = "gray10", 
+              border.col = "gray80") +
+  tm_shape(faults) +
+  tm_lines(col = "yellow")
+
+fault_map
+
+```
+
+But what if we're only interested in fault lines within SB county? Then we'll want to clip our spatial data based on another polygon:
+
+First, just get the spatial information for SB County (from ca_clean):
+```{r}
+
+sb_polygon <- ca_clean %>% 
+  filter(name == "Santa Barbara") # Ask: why are there multiple polygons for a single county? Islaaaaands
+
+```
+
+Then, clip the fault lines data, bounded by sb_polygon
+```{r}
+fault_clip <- st_intersection(faults, sb_polygon)
+
+# Check it out: 
+# plot(fault_clip)
+```
+
+Then let's just plot the fault lines in SB:
+```{r}
+
+faults_sb <- tm_basemap("Esri.NatGeoWorldMap") +
+  tm_shape(sb_polygon) +
+  tm_polygons(col = "black", 
+              alpha = 0.2, 
+              border.col = "gray10") +
+  tm_shape(fault_clip) +
+  tm_lines(col = "white")
+
+faults_sb
+
+```
+
+## END. 

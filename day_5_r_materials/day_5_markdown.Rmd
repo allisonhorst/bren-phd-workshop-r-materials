@@ -1,0 +1,263 @@
+---
+title: "Day 5: Meet RMarkdown, wrangling continued, visualization with ggplot, LaTeX equations, in-line variable referencing"
+author: "Allison Horst"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# PhD Workshop R/RStudio Day 2: RMarkdown, Data Wrangling Continued, Visualization in ggplot
+
+## 1. RMarkdown Intro
+
+This is a markdown document. Notice that it kind of feels like working in a script...but there's one major difference. That is that all this text isn't considered active code any more. Now, we treat this as a text editor (like a word document), with some code functionality for punctuation (italics, bold, etc.) but when we want to include active code, it needs to exist in a code chunk. 
+
+Make sure to check out the cheatsheets (Help > R Cheatsheets).
+
+Use single asterisks for italics: *Italics Example*
+
+Use double asterisks for bold: **Bold Example**
+
+1. Numbered
++ Indented from 1...
++ Also indented from 1...
+2. List
+3. Example
+
+a. Lettered
+b. List
+c. Example
+
+I can include some^superscripts^ or some~subscript~
+
+Easily add links: https://www.ucsb.edu/. 
+
+## 2. Inserting Code Chunks 
+
+You can insert a new code chunk using Insert > R (which places a new code chunk in the markdown document for you...)
+
+Input active code and comments into the code chunk. You can decide if you want to leave the code in the final knitted document, or if you want to leave it out.  
+
+```{r}
+# Can label code chunks
+# CREATING VARIABLES
+
+A <- 100 # And write comments in here....
+B <- 200 # Growth rate constant (1/h)
+
+```
+
+And then I can just continue typing.
+
+Another thing that's also really cool is that you can have outcomes link to text. That means that if I update something in my code/dataset, the value that is reported using that outcome will automatically be updated. 
+
+For example, I can insert `r A` (make sure that's the diagonal apostrophe under the tilde, not the regular apostrophe), and when it reports then the VALUE of A will print. And if I update the value of variable A in the active code, then it will automatically be updated here! Avoids missing updates if you try to do this manually.
+
+Why is this great? Because it's REPRODUCIBLE and keeps all of your text and data analyses in one place. You don't have 45 files to sift through. It's easier for collaborators. 
+
+We still use it just how we used a script...but now we need to include any active code (including loading packages, reading in data, etc.) in code chunks. 
+
+## 3. Load package (tidyverse)
+
+```{r}
+suppressMessages(library(tidyverse)) # Loads tidyverse
+# Only include "suppressMessages" because there's something that comes up in the tidyverse loading report that isn't compatible with LaTex. 
+```
+
+And I'll go ahead and load some data too. Remember that we've created a project. So all we need to do is drop any files that we want to use into that project folder, and then use read_csv to get it into R's active brain. 
+
+## 4. Load np_visits.csv Dataset (as 'np')
+
+Move the dataset np_visits.csv into the project folder. You should see it show up in the 'Files' tab at the lower right of your RStudio environment. Remember, we still need to load np_visits.csv before we can actually work with it. 
+
+```{r, echo = FALSE, message = FALSE}
+np <- read_csv("np_visits.csv")
+```
+
+Here: a heads up about adding arguments in code chunk header to decide if you see the output in the knitted document. 
+
+Always look at your data first. Where can I do this if I'm not worried about storing the outputs? CONSOLE. Note: View reports to new viewing tab in RStudio, so knitting with it is kind of problematic.
+
+```{r}
+# View(np)
+# head(np)
+# tail(np)
+# dim(np)
+# names(np)
+# summary(np)
+```
+
+##5. Data wrangling with dplyr continued
+
+We want to create a subset that only contains National Parks in California, and we need to exclude the 'Total' values that exist in the visitor columns (so that we can do some calculations ourselves). We'll do the following using PIPING (remember the pipe operator %>%, which you can add using command + shift + m IN A CODE CHUNK):
+
+1. Only keep columns State, Name, Type, Visitors, YearRaw using select()
+2. Keep only rows where the State == "CA", Type == "National Park", and the 'YearRaw' column does NOT match (!=) "Total"
+3. Arrange alphabetically by Name, then numerically by YearRaw
+
+```{r}
+
+np_ca <- np %>% 
+  select(State, Name, Type, Visitors, YearRaw) %>% 
+  filter(State == "CA", Type == "National Park", YearRaw != "Total") %>% 
+  arrange(Name, YearRaw)
+
+
+```
+
+Remember, if there is a SINGLE character string in a column, R will load and remember that variable as a "character". We want to make a line graph where years (as a value) are on the x-axis. That means we need to coerce the class of 'YearRaw' to numeric before we can actually do anything...
+
+## 6. Coerce 'YearRaw' to class 'numeric'
+
+```{r}
+
+np_ca <- np_ca %>% 
+  mutate(YearRaw = as.numeric(YearRaw))
+
+```
+
+Now check the class again, and you'll see that it's been reassigned. Always check classes!!! You can similarly change things to factors, strings, numeric, characters, etc. 
+
+Once we've updated so that the Year is a numeric variable, let's make a graph of the data (visitation over time for each of the parks in CA...)
+
+## 7. Graphs in ggplot
+
+ggplot2 is a graphics package (exists in the tidyverse) built to make data visualization and customization much easier. 
+
+There are three things you need to tell R when you're making a graph using ggplot:
+
+1. That you're using ggplot
+2. The data that you're using (including what your x/y variables are as appropriate)
+3. The type of graph you want to produce
+
+```{r}
+
+visitation_graph <- ggplot(np_ca, aes(x = YearRaw, y = Visitors, color = Name)) +
+  geom_line() +
+  theme_minimal()
+
+# Remind them that these are all customizable - and the best thing to do is start LOOKING FOR GOOD EXAMPLES, saving and working through the code! 
+
+visitation_graph
+
+
+```
+
+Let's make another one for fun...
+
+```{r}
+visitation_graph_2 <- ggplot(np_ca, aes(x = YearRaw, y = Visitors, fill = Name)) +
+  geom_col() +
+  ggtitle("My Graph") +
+  theme_light()
+
+visitation_graph_2
+```
+
+## 8. Practice Wrangling + ggplot (on their own)
+
+Now for practice, I'll have you create a subset (using dplyr wrangling skills) and make a graph on your own (or working together in small groups). 
+
+From the original data frame (np), create a subset that only contains information for all types of parks in Washington. Arrange parks alphabetically and by increasing year. Remove the 'Total' values for visitation. Make sure to update the 'YearRaw' column to "numeric." Create a scatterplot (geom_point) of the visitation.
+
+```{r}
+nm <- np %>% 
+  filter(State == "WA") %>% 
+  filter(Visitors != "Total") %>% 
+  mutate(YearRaw = as.numeric(YearRaw))
+
+# or... nm$YearRaw <- as.numeric(nm$YearRaw)
+
+nm_graph <- ggplot(nm, aes(x = YearRaw, y = Visitors, color = Name)) +
+  geom_point() +
+  ylim(0,5000000) +
+  labs(x = "Year", y = "Visitors")
+
+nm_graph
+
+```
+
+## 9. dplyr::group_by() + summarize for aggregation & summary stats (pivot tables)
+
+Now for some more useful wrangling...
+
+Sometimes you will want to be able to calculate something for a certain variable AFTER grouping by different levels in another variable. For example, here maybe I would want to calculate the total number of visitors for each PARK TYPE over all years or something. That means that R needs to understand that I first want to create different groups (depending on park TYPE), then add all of the values together from the 'Visitors' column for that group. 
+
+The group_by() function provides an easy way of aggregating information that you want to do calculations for. 
+
+Let's do an example to clarify:
+
+What if I want to find the TOTAL SUM of all visitors for each park type?
+First I will group by 'Type', then use the sum function on the grouped data. I'm going to do this after removing the 'total' values, since that will mess things up. 
+
+```{r}
+
+np_2 <- np %>% 
+  filter(YearRaw != "Total") %>% 
+  mutate(YearRaw = as.numeric(YearRaw))
+
+# Check the class: (now numeric)
+class(np_2$YearRaw)
+
+# Now let's do some grouping
+
+np_3 <- np_2 %>% 
+  group_by(Type, State)
+
+np_summary <- np_3 %>% 
+  summarize(
+    vis_tot = sum(Visitors),
+    vis_min = min(Visitors),
+    vis_max = max(Visitors)
+    )
+
+# Note: you can do that all within a continuous piped sequence (just pipe from the group_by line into the summarize() function...)
+
+```
+
+So group_by can be very useful in performing calculations on different GROUPS that exist within the data frame. 
+
+## 10. dplyr::case_when()
+
+Another cool one (like if-else statement): mutate + case_when:
+
+Let's say that anywhere the park type is "National Park" I want a new column to contain "NP"; if there is a "National Monument" I want the new column to contain "NM"; if anything else, I want the new column to contain "Other".
+
+```{r}
+
+park_abbr <- np %>% 
+  select(Name, Type, YearRaw, Visitors) %>% 
+  mutate(
+    abbr = case_when(
+      Type == "National Park" ~ "NP",
+      Type == "National Monument" ~ "NM",
+      T ~ "Other"
+    )
+  )
+
+```
+
+And it also works with numeric conditions. Let's say that anytime 'Visitors' is under 300,000, a new column contains "Low", if above 300,000 contains "High":
+
+```{r}
+
+np_low_high <- np %>% 
+  select(Name, YearRaw, Visitors) %>% 
+  mutate(
+    lohi = case_when(
+      Visitors <= 3e5 ~ "Low",
+      Visitors > 3e5 ~ "High"
+    )
+  )
+
+```
+
+
+#### Other cool markdown formatting stuff: 
+
+Something else that's cool: You can add LaTeX equations in your markdown document using a single dollar sign on either side (in-line) like this: $y=mx+b$, or a double dollar sign for centered block equation like this: $$a=2c+4$$
+
+And, if you want to add something that looks like code in the knitted document, use backticks on either side `like this`.

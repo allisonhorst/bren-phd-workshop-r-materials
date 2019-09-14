@@ -1,0 +1,308 @@
+---
+title: "Day 6 Key: More markdown, dataviz & wrangling, hypothesis tests, regression"
+author: "Allison Horst"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Day 6 Materials
+
+**Packages needed:**
+
+- tidyverse
+- RColorBrewer
+- stargazer
+- janitor
+- ggbeeswarm
+
+**Goals:**
+
+- Markdown continued (check)
+- Basic data exploration graphs (hist, qqnorm)
+- Data wrangling continued + group_by (check)
+- Graphs with error bars (check)
+- Explicitly ordering categorical variables (check)
+- ggplot finalization (check)
+- Creating some data from scratch
+- Basic statistics (t-tests, chisq.test)
+- Linear regression (OLS and MLR) + diagnostics
+- Model outputs with stargazer
+
+First: Create a new project, and open a new Rmarkdown file. Then:
+
+### 1. Load packages
+
+**Notes: use 'echo = FALSE' in code chunk header if you don't want the CODE to show up in the knitted doc, use 'message = FALSE' if you don't want any MESSAGES showing up in the output doc.**
+
+```{r, message = FALSE}
+library(tidyverse)
+library(RColorBrewer)
+library(stargazer)
+library(janitor)
+library(ggbeeswarm)
+```
+
+### 2. Load data
+
+Remember to drop the file into the project folder first, this puts it right into your working directory. Then you don't have to worry about the absolute path, because R will know right where to look! 
+
+```{r, message = FALSE}
+
+lobsters <- read_csv("lter_lobster.csv") %>% 
+  clean_names()
+
+```
+
+### 3. Basic data exploration tools
+
+It's always important to look at our data. Let's say we want to look at the distribution of lobster sizes at all five sites (ignoring that there are different years, transects, etc).
+
+Let's group the data and do some visualization using ggplot for exploratory data analysis. 
+
+```{r}
+
+lobster_eda <- lobsters
+
+# Histograms are always a great idea. They show us the general structure (distribution) of our data. 
+ggplot(lobster_eda, aes(size)) +
+  geom_histogram() +
+  facet_wrap(~site)
+
+# QQ plots are ideal for assessing normality. The closer the relationship to linear, the closer the data are to normally distributed. 
+ggplot(lobster_eda, aes(sample = size)) +
+  geom_qq() +
+  facet_wrap(~site)
+
+# Boxplots show important characteristics like max, min, 25th and 75th quantiles, and median. Good for evaluating outliers, etc.
+ggplot(lobster_eda, aes(x = site, y = size)) +
+  geom_boxplot()
+
+# Jitterplots are TOTALLY unbiased because they show EVERYTHING
+ggplot(lobster_eda, aes(x = site, y = size, color = site)) +
+  geom_jitter(width = 0.1, alpha = 0.4, size = 0.8)
+
+# Even better though...ggbeeswarm?
+
+ggplot(lobster_eda, aes(x = site, y = size, color = site)) +
+  geom_beeswarm(alpha = 0.5) +
+  theme_light()
+
+```
+
+Now, let's say that we want to find the mean lobster size for each SITE at each different YEAR (ignoring different transects, etc.)
+
+### 4. Find mean and SD lobster size at each different SITE at each different YEAR using group_by with summarize()
+
+```{r}
+
+site_group <- lobsters %>% 
+  group_by(site, year) %>% 
+  summarize(
+    mean_size = mean(size),
+    sd_size = sd(size)
+  )
+
+site_group
+```
+
+### 5. Bar graph with error bars for mean size & location (using ggplot)? But also make sure to read why dynamite plots must die: https://simplystatistics.org/2019/02/21/dynamite-plots-must-die/
+
+```{r}
+
+lobster_plot <- ggplot(site_group, aes(x = year, 
+                                       y = mean_size, 
+                                       fill = site)) +
+  geom_col(position = "dodge", color = "black") +
+  scale_fill_brewer(palette = "YlGnBu") +
+  geom_errorbar(aes(ymin = mean_size - sd_size, 
+                    ymax = mean_size + sd_size), 
+                width = 0.1, 
+                position = position_dodge(0.9)) +
+  labs(y = "Mean Lobster Carapace Length (mm)") +
+  theme_classic() +
+  ggtitle("Lobster Sizes, Santa Barbara Channel Sites\n2012 - 2014") +
+  scale_y_continuous(expand = c(0,0))
+  
+
+lobster_plot
+```
+
+Let's say I'm only interested in 2012 data, and I want these to show up from LOW to HIGH on my chart. 
+
+Then I'm going to only keep data from my previous data frame where YEAR == 2012, and arrange from low to high mean size. 
+
+```{r}
+lobsters2012 <- site_group %>% 
+  filter(year == 2012) %>% 
+  arrange(mean_size)
+
+lobsters2012
+
+# What happens if we just plot this?
+
+ggplot(lobsters2012, aes(x = site, y = mean_size, fill = site)) +
+  geom_col(position = "dodge") # It automatically arranges alphabetically by site, even though our original data frame is now arranged from low to high mean values.
+```
+
+But we want to create an ORDERED column graph. Let's use forcats::fct_reorder()
+
+```{r}
+# Check the class of the 'SITE' variable
+class(lobsters2012$site) # It's a character. Hmm.
+
+# Check the LEVELS as is:
+levels(lobsters2012$site) # NULL - because this only works for factors, but it's currently a character
+
+# Make a copy of the data frame (called lob_df) where the site column has been converted to a factor (with mutate), and reorder! 
+lob_df <- lobsters2012 %>% 
+  ungroup() %>% 
+  mutate(site = as.factor(site)) # At this point, still in alphabetical order (but has been converted to factor. Now we want to reorder them based on the values in mean_size) 
+
+
+```
+
+Now we can use fct_reorder within ggplot2 to set the orders: 
+```{r}
+
+ggplot(lob_df, aes(x = fct_reorder(site, mean_size), y = mean_size, fill = site)) +
+  geom_col(position = "dodge") # It automatically arranges alphabetically by site, even though our original data frame is now arranged from low to high mean values.
+
+```
+
+### 6. Some basic hypothesis tests examples in R
+
+We're going to be using built-in datasets in R to do some basic hypothesis test examples. *Note: The datasets are a great place to just quickly get data to practice with...all existing in R, so you don't need to load anything in.*
+
+Just run `data()` in the console to see all base datasets, and those in any packages you have loaded! Cool.
+
+#### Two-Sample t-test
+Use the t.test() function to perform a two-sided, two-sample Student's t-test to compare means. 
+
+Recall: 
+- Null hypothesis: difference in means = 0
+- Alternative hypothesis: difference in means is NOT 0
+
+We'll just create data from scratch (you don't have to match mine) by producing vectors using the combine (c) function: 
+
+```{r}
+sample_1 <- c(4,5,3,1,7,5,3,4,6,4,2,4,4,5,8)
+sample_2 <- c(10,11,9,5,6,10,12,15,9,5,7,6,9,10,11)
+```
+
+ASSUMING WE'VE DONE ALL NECESSARY EXPLORATORY DATA ANALYSIS, then we can just use t.test() to compare. Check out the defaults using ?t.test
+
+```{r}
+ex_ttest <- t.test(sample_1, sample_2)
+
+ex_ttest
+```
+This outcome tells us what conceptually? That if the samples were drawn from populations that truly have the same mean value, then there is only a probability of 0.000014 that we could have found means of our samples that were at LEAST this different by random chance. That's unlikely. What is way MORE likely is that they were drawn from populations with different means...so my conclusion is "There was a significant difference in [variable] for those measured at Site A and Site B (t = -5.42, p < 0.001)." 
+
+Answer: What else might be important metrics to discuss the difference?
+
+- Absolute difference...(more than double, proportional, etc.)
+- Effect size (e.g. Cohen's D)
+
+Note that you CAN do one-sample tests (uncommon) OR one-sided tests, based on what your hypothesis is (if you give it directionality...here, we didn't). 
+
+#### Chi-Square
+
+Reminder of chi-square test for association. Tests for equal proportions existing within each group (the null hypothesis). We'll create our own data here, too, by making a contingency table from scratch (you might also want to look into the 'table' function in R, which will count things up for you...)
+
+data.frame() will bind by columns, cbind by columns, rbind by rows, matrix will populate in whatever order you ask it (by rows first or columns first). We'll use rbind()
+
+```{r}
+
+df <- tribble(
+  ~UCSB, ~UCLA,
+  24, 47,
+  16, 39
+) %>% 
+  data.matrix() # Since rownames doesn't work on tibbles...
+
+rownames(df) <- c("Pizza","Tacos") # Similarly can use rownames
+
+```
+
+Since chi-square compares proportions (based on the null hypothesis that proportions across groups are the same), then it would be useful to look at the proportions. Use prop.table, and specify whether finding proportions by the entire table (no argument), by columns (2) or rows (1)
+
+```{r}
+prop.table(df, 1) # To find proportions by ROWS
+prop.table(df, 2) # To find proportions by COLUMNS
+prop.table(df) # Proportions across all groups
+```
+
+These are pretty close in terms of proportion of students who chose pizza versus tacos at each school, right? So would this make us tend to think that there IS or is NOT an effect of school on food choice? Probably there is NOT a significant effect. But let's see...
+
+Once we have data in contingency table format, we can use the chisq.test() function directly on it:
+
+```{r}
+df_chisq <- chisq.test(df)
+
+df_chisq
+```
+
+As we might expect, there is no significant association between school and food preference ($\chi^2 = 0.14, df = 1, p = 0.71$). You can look up Yates Continuity Correction on your own (for overestimate of X^2 values in 2x2 contingency tables...).
+
+Now let's move onto some regression with nice output tables.
+
+### 7. OLS
+
+We'll do basic linear regression using the built-in 'trees' dataset (for Girth v Volume) to describe a relationship between the two. 
+
+First, look at it (always). Does a linear relationship make sense to consider? We'll say yes. 
+
+```{r}
+ggplot(trees, aes(x = Girth, y = Volume)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+Then, let's actually prepare the model: 
+
+We create models in R using the format:
+
+model_name <- lm(out ~ A + B, data = ?)
+
+```{r}
+tree_lm <- lm(Volume ~ Girth, data = trees)
+tree_lm
+summary(tree_lm)
+```
+
+Write out the equation and interpret the p-value for the coefficient for Girth. 
+
+Latex Equations: $Volume = 5.07*Girth -39.94$
+
+But we should want to do some diagnostics on it as well. What's kind of cool is the plot() function in base R is built to run diagnostics for lm() models: 
+
+```{r}
+
+par(mfrow = c(2,2))
+plot(tree_lm) # Briefly explain what each of four outputs tell us
+
+```
+
+
+#### 8. Multiple Linear Regression Example
+Now let's say we want to do multiple linear regression (multiple predictor variables, single continuous outcome variable).
+
+Using the same data, say we think that cherry tree height and girth influence the volume:
+
+```{r}
+tree_mlr <- lm(Volume ~ Height + Girth, data = trees)
+
+tree_mlr
+summary(tree_mlr)
+plot(tree_mlr)
+
+```
+
+```{r, results = "asis"}
+stargazer(tree_mlr, type = "html")
+```
+
+
+
