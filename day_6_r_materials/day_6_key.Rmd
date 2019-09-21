@@ -20,12 +20,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 **Goals:**
 
-- Markdown continued (check)
+- Markdown continued
 - Basic data exploration graphs (hist, qqnorm)
-- Data wrangling continued + group_by (check)
-- Graphs with error bars (check)
-- Explicitly ordering categorical variables (check)
-- ggplot finalization (check)
+- Data wrangling continued + group_by
+- Graphs with error bars
+- Explicitly ordering categorical variables
+- ggplot finalization 
 - Creating some data from scratch
 - Basic statistics (t-tests, chisq.test)
 - Linear regression (OLS and MLR) + diagnostics
@@ -90,6 +90,22 @@ ggplot(lobster_eda, aes(x = site, y = size, color = site)) +
   geom_beeswarm(alpha = 0.5) +
   theme_light()
 
+# We can also add different types of graphs on top of one-another, as long as the graph types are compatible. Like a beeswarm plot and a boxplot and a violin plot?
+
+# DISCLAIMER: this is totally overcomplicated and overplotted, and only meant to show technically how we can add additional geom layers
+
+ggplot(lobster_eda, aes(x = site, y = size, color = site)) +
+  geom_beeswarm(pch = 21,
+                alpha = 0.5,
+                aes(fill = site)) +
+  geom_boxplot(fill = NA,
+               color = "black",
+               width = 0.2,
+               outlier.color = NA) +
+  geom_violin(fill = NA,
+              aes(color = site)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2")
 ```
 
 Now, let's say that we want to find the mean lobster size for each SITE at each different YEAR (ignoring different transects, etc.)
@@ -108,7 +124,7 @@ site_group <- lobsters %>%
 site_group
 ```
 
-### 5. Bar graph with error bars for mean size & location (using ggplot)? But also make sure to read why dynamite plots must die: https://simplystatistics.org/2019/02/21/dynamite-plots-must-die/
+### 5. Bar graph with error bars for mean size & location (using ggplot)? But also make sure to read why dynamite plots hide way too much about the data, and should be used with caution: https://simplystatistics.org/2019/02/21/dynamite-plots-must-die/
 
 ```{r}
 

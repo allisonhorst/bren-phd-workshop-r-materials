@@ -35,46 +35,65 @@ I can include some^superscripts^ or some~subscript~
 
 Easily add links: https://www.ucsb.edu/. 
 
+[Or linked text...](https://www.ucsb.edu/)
+
+And when you knit, the formatting will show up! We'll just knit to HTML here, but there are other options (Word, PDF). Knit by pressing the 'Knit' button, or use shortcut Command + Shift + K.
+
 ## 2. Inserting Code Chunks 
 
-You can insert a new code chunk using Insert > R (which places a new code chunk in the markdown document for you...)
+You can insert a new code chunk using Insert > R (which places a new code chunk in the markdown document for you...), or use the shorcut Control + Alt/Option + I to add one quickly. 
+
+
 
 Input active code and comments into the code chunk. You can decide if you want to leave the code in the final knitted document, or if you want to leave it out.  
 
 ```{r}
 # Can label code chunks
 # CREATING VARIABLES
+# Another shortcut: Alt + (minus key) for the assignment arrow <- <- <- 
 
 A <- 100 # And write comments in here....
 B <- 200 # Growth rate constant (1/h)
 
 ```
 
-And then I can just continue typing.
+And then I can just continue typing. Outside of the code chunk. Stuck in there? Move your cursor past the last 3 backticks ``` in the chunk and press enter to escape. 
 
 Another thing that's also really cool is that you can have outcomes link to text. That means that if I update something in my code/dataset, the value that is reported using that outcome will automatically be updated. 
 
-For example, I can insert `r A` (make sure that's the diagonal apostrophe under the tilde, not the regular apostrophe), and when it reports then the VALUE of A will print. And if I update the value of variable A in the active code, then it will automatically be updated here! Avoids missing updates if you try to do this manually.
+For example, I can insert `r A` (if you just see the number 100 there, that means it's working - check the .Rmd to see the code, and make sure that's the diagonal apostrophe under the tilde, not the regular apostrophe), and when it reports then the VALUE of A will print. And if I update the value of variable A in the active code, then it will automatically be updated here! Avoids missing updates if you try to do this manually.
 
-Why is this great? Because it's REPRODUCIBLE and keeps all of your text and data analyses in one place. You don't have 45 files to sift through. It's easier for collaborators. 
+Why is this great? Because it's reproducible and keeps all of your text and data analyses in one place. You don't have 45 files to sift through. It's easier for collaborators. Your values in text will be updated when your data/analysis is updated (no more copy/paste = less time and less opportunity for mistakes).
 
-We still use it just how we used a script...but now we need to include any active code (including loading packages, reading in data, etc.) in code chunks. 
+We write code just how we used a script...but now we need to include any active code (including loading packages, reading in data, etc.) in code chunks. 
 
 ## 3. Load package (tidyverse)
 
 ```{r}
-suppressMessages(library(tidyverse)) # Loads tidyverse
+library(tidyverse) # Loads tidyverse
+library(janitor) # Load the janitor package
+library(ggbeeswarm)
 # Only include "suppressMessages" because there's something that comes up in the tidyverse loading report that isn't compatible with LaTex. 
 ```
 
 And I'll go ahead and load some data too. Remember that we've created a project. So all we need to do is drop any files that we want to use into that project folder, and then use read_csv to get it into R's active brain. 
+See what the knitted document looks like.
+
+Default is that all code and outputs (including warnings, messages, outputs) will show up unless you tell it to do otherwise. There are all kinds of options. 
+
+For example: 
+
+- make nothing show up with: include = FALSE
+- make code not show up with: echo = FALSE
+- see the RMarkdown cheatsheet (Help > Cheatsheets > RMarkdown) for all kinds of other cool options 
 
 ## 4. Load np_visits.csv Dataset (as 'np')
 
 Move the dataset np_visits.csv into the project folder. You should see it show up in the 'Files' tab at the lower right of your RStudio environment. Remember, we still need to load np_visits.csv before we can actually work with it. 
 
 ```{r, echo = FALSE, message = FALSE}
-np <- read_csv("np_visits.csv")
+np <- read_csv("np_visits.csv") %>% 
+  clean_names()
 ```
 
 Here: a heads up about adding arguments in code chunk header to decide if you see the output in the knitted document. 
@@ -88,38 +107,45 @@ Always look at your data first. Where can I do this if I'm not worried about sto
 # dim(np)
 # names(np)
 # summary(np)
+# ls()
 ```
 
 ##5. Data wrangling with dplyr continued
 
-We want to create a subset that only contains National Parks in California, and we need to exclude the 'Total' values that exist in the visitor columns (so that we can do some calculations ourselves). We'll do the following using PIPING (remember the pipe operator %>%, which you can add using command + shift + m IN A CODE CHUNK):
+We want to create a subset that only contains National Parks in California, and we need to exclude the 'Total' values that exist in the visitor columns (so that we can do some calculations ourselves). We'll do the following using the pipe operator %>% which you can add using command + shift + m in a code chunk):
 
-1. Only keep columns State, Name, Type, Visitors, YearRaw using select()
-2. Keep only rows where the State == "CA", Type == "National Park", and the 'YearRaw' column does NOT match (!=) "Total"
-3. Arrange alphabetically by Name, then numerically by YearRaw
+1. Only keep columns state, name, type, visitors, year_raw using select()
+2. Change the name of 'year_raw' to 'year'
+3. Keep only rows where the State == "CA", Type == "National Park", and the 'YearRaw' column does NOT match (!=) "Total"
+4. Arrange alphabetically by Name, then numerically by YearRaw
 
 ```{r}
 
 np_ca <- np %>% 
-  select(State, Name, Type, Visitors, YearRaw) %>% 
-  filter(State == "CA", Type == "National Park", YearRaw != "Total") %>% 
-  arrange(Name, YearRaw)
+  select(state, name, type, visitors, year_raw) %>% 
+  rename(year = year_raw) %>% 
+  filter(state == "CA", type == "National Park", year != "Total") %>% 
+  arrange(name, year)
 
 
 ```
 
-Remember, if there is a SINGLE character string in a column, R will load and remember that variable as a "character". We want to make a line graph where years (as a value) are on the x-axis. That means we need to coerce the class of 'YearRaw' to numeric before we can actually do anything...
+Remember, if there is a single character string in a column, R will load and remember that variable as a "character". 
+
+First, check the class of 'year' using the `class()` function.
+
+We want to make a line graph where years (as a value) are on the x-axis. That means we need to coerce the class of 'YearRaw' to numeric before we can actually do anything...
 
 ## 6. Coerce 'YearRaw' to class 'numeric'
 
 ```{r}
 
 np_ca <- np_ca %>% 
-  mutate(YearRaw = as.numeric(YearRaw))
+  mutate(year = as.numeric(year))
 
 ```
 
-Now check the class again, and you'll see that it's been reassigned. Always check classes!!! You can similarly change things to factors, strings, numeric, characters, etc. 
+Now check the class again, and you'll see that it's been reassigned. Always check classes - this can be an especially frustrating thing to figure out after your functions aren't working as expected. You can similarly change things to factors, strings, numeric, characters, etc. 
 
 Once we've updated so that the Year is a numeric variable, let's make a graph of the data (visitation over time for each of the parks in CA...)
 
@@ -135,7 +161,7 @@ There are three things you need to tell R when you're making a graph using ggplo
 
 ```{r}
 
-visitation_graph <- ggplot(np_ca, aes(x = YearRaw, y = Visitors, color = Name)) +
+visitation_graph <- ggplot(np_ca, aes(x = year, y = visitors, color = name)) +
   geom_line() +
   theme_minimal()
 
@@ -146,10 +172,10 @@ visitation_graph
 
 ```
 
-Let's make another one for fun...
+Let's make another one for fun...(note: stacked column graphs are not easy for readers to interpret and you should think about how it works for your data. This one is overcomplicated to view and interpret.)
 
 ```{r}
-visitation_graph_2 <- ggplot(np_ca, aes(x = YearRaw, y = Visitors, fill = Name)) +
+visitation_graph_2 <- ggplot(np_ca, aes(x = year, y = visitors, fill = name)) +
   geom_col() +
   ggtitle("My Graph") +
   theme_light()
@@ -157,26 +183,25 @@ visitation_graph_2 <- ggplot(np_ca, aes(x = YearRaw, y = Visitors, fill = Name))
 visitation_graph_2
 ```
 
-## 8. Practice Wrangling + ggplot (on their own)
+## 8. Practice wrangling & ggplot
 
 Now for practice, I'll have you create a subset (using dplyr wrangling skills) and make a graph on your own (or working together in small groups). 
+From the original data frame (np), create a subset called 'ut_np' that only contains information for all types of parks in Utah. Remove the 'Total' values for visitation. Arrange parks alphabetically, then by increasing year. Make sure to update the 'year_raw' column to "numeric." Create a scatterplot (geom_point) of the visitation.
 
-From the original data frame (np), create a subset that only contains information for all types of parks in Washington. Arrange parks alphabetically and by increasing year. Remove the 'Total' values for visitation. Make sure to update the 'YearRaw' column to "numeric." Create a scatterplot (geom_point) of the visitation.
+##################
+FIX THIS WTF
+##################
 
 ```{r}
-nm <- np %>% 
-  filter(State == "WA") %>% 
-  filter(Visitors != "Total") %>% 
-  mutate(YearRaw = as.numeric(YearRaw))
+np_ut <- np %>% 
+  filter(state == "UT") %>% 
+  select(state, name, visitors, year_raw) %>% 
+  filter(year_raw != "Total") %>% 
+  mutate(year_raw = as.numeric(year_raw))
 
-# or... nm$YearRaw <- as.numeric(nm$YearRaw)
+ggplot(np_ut, aes(x = year_raw, y = visitors)) +
+  geom_point(aes(color = name))
 
-nm_graph <- ggplot(nm, aes(x = YearRaw, y = Visitors, color = Name)) +
-  geom_point() +
-  ylim(0,5000000) +
-  labs(x = "Year", y = "Visitors")
-
-nm_graph
 
 ```
 
@@ -196,22 +221,22 @@ First I will group by 'Type', then use the sum function on the grouped data. I'm
 ```{r}
 
 np_2 <- np %>% 
-  filter(YearRaw != "Total") %>% 
-  mutate(YearRaw = as.numeric(YearRaw))
+  filter(year_raw != "Total") %>% 
+  mutate(year_raw = as.numeric(year_raw))
 
 # Check the class: (now numeric)
-class(np_2$YearRaw)
+class(np_2$year_raw)
 
 # Now let's do some grouping
 
 np_3 <- np_2 %>% 
-  group_by(Type, State)
+  group_by(type, state)
 
 np_summary <- np_3 %>% 
   summarize(
-    vis_tot = sum(Visitors),
-    vis_min = min(Visitors),
-    vis_max = max(Visitors)
+    vis_tot = sum(visitors),
+    vis_min = min(visitors),
+    vis_max = max(visitors)
     )
 
 # Note: you can do that all within a continuous piped sequence (just pipe from the group_by line into the summarize() function...)
@@ -229,11 +254,11 @@ Let's say that anywhere the park type is "National Park" I want a new column to 
 ```{r}
 
 park_abbr <- np %>% 
-  select(Name, Type, YearRaw, Visitors) %>% 
+  select(name, type, year_raw, visitors) %>% 
   mutate(
     abbr = case_when(
-      Type == "National Park" ~ "NP",
-      Type == "National Monument" ~ "NM",
+      type == "National Park" ~ "NP",
+      type == "National Monument" ~ "NM",
       T ~ "Other"
     )
   )
@@ -245,19 +270,38 @@ And it also works with numeric conditions. Let's say that anytime 'Visitors' is 
 ```{r}
 
 np_low_high <- np %>% 
-  select(Name, YearRaw, Visitors) %>% 
+  select(name, year_raw, visitors) %>% 
   mutate(
     lohi = case_when(
-      Visitors <= 3e5 ~ "Low",
-      Visitors > 3e5 ~ "High"
+      visitors <= 3e5 ~ "Low",
+      visitors > 3e5 ~ "High"
     )
   )
 
 ```
 
+Not that this makes sense here, but we could do a jitter plot, or a beeswarm plot, to show all of the points (usually a good option for observations of a random variable across different groups). I'll use the 'nm' data frame we created above for Washington parks:
+
+```{r}
+
+# Disclaimer: these are disasters and only meant to show functionally how to produce some different types of graphs. They are ugly, mostly wrong, and inappropriate for any type of communication.  
+
+ggplot(np_ut, aes(x = name, y = visitors)) +
+  geom_jitter(aes(color = name))
+
+ggplot(np_ut, aes(x = year_raw, y = visitors)) +
+  geom_point() + 
+  geom_smooth() + # Danger - KNOW WHAT SMOOTHING YOU'RE USING
+  geom_line(size = 0.5, aes(color = name))
+
+```
 
 #### Other cool markdown formatting stuff: 
 
 Something else that's cool: You can add LaTeX equations in your markdown document using a single dollar sign on either side (in-line) like this: $y=mx+b$, or a double dollar sign for centered block equation like this: $$a=2c+4$$
 
 And, if you want to add something that looks like code in the knitted document, use backticks on either side `like this`.
+
+Extra tip: 
+Knit everything with Command + Shift + K
+
